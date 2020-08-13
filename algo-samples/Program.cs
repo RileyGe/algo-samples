@@ -13,6 +13,7 @@ namespace algo_samples
     {
         static void Main(string[] args)
         {
+            ASAExample.Run(args); return;
             string ALGOD_API_ADDR = "https://testnet-algorand.api.purestake.io/ps1";
             string ALGOD_API_TOKEN = "GeHdp7CCGt7ApLuPNppXN4LtrW07Mm1kaFNJ5Ovr"; 
             AlgodApi algodApiInstance = new AlgodApi(ALGOD_API_ADDR, ALGOD_API_TOKEN);

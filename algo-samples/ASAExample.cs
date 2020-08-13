@@ -13,7 +13,7 @@ namespace algo_samples
     class ASAExample
     {
         // Utility function for sending a raw signed transaction to the network        
-        public static void Main(params string[] args) //throws Exception
+        public static void Run(params string[] args) //throws Exception
         {
             string ALGOD_API_ADDR = "https://testnet-algorand.api.purestake.io/ps1";
             string ALGOD_API_TOKEN = "GeHdp7CCGt7ApLuPNppXN4LtrW07Mm1kaFNJ5Ovr";
@@ -54,7 +54,11 @@ namespace algo_samples
             {
                 // 每种地址的意义请参照https://developer.algorand.org/docs/features/asa/
                 // 默认情况下manager/reserve/freeze/clawback账号都是sender
-                Managerkey = acct2.Address.ToString()
+                // 如果设置了manager,其他没有设置的地址reserve/freeze/clawback都会是manager
+                Managerkey = acct1.Address.ToString(),
+                Clawbackaddr = acct2.Address.ToString(),
+                Freezeaddr = acct1.Address.ToString(),
+                Reserveaddr = acct1.Address.ToString()
             };
 
             var tx = Utils.GetCreateAssetTransaction(ap, transParams, "asset tx message");
@@ -94,12 +98,12 @@ namespace algo_samples
             // creation parameters and only changing the manager
             // and transaction parameters like first and last round
             // now update the manager to acct1
-            ap.Managerkey = acct1.Address.ToString();
-            tx = Utils.GetConfigAssetTransaction(acct2.Address, assetID, ap, transParams, "config trans");
+            ap.Managerkey = acct2.Address.ToString();
+            tx = Utils.GetConfigAssetTransaction(acct1.Address, assetID, ap, transParams, "config trans");
 
             // The transaction must be signed by the current manager account
             // We are reusing the signedTx variable from the first transaction in the example    
-            signedTx = acct2.SignTransaction(tx);
+            signedTx = acct1.SignTransaction(tx);
             // send the transaction to the network and
             // wait for the transaction to be confirmed
             try
@@ -122,14 +126,9 @@ namespace algo_samples
             Console.WriteLine(ap);
 
 
-
-            // 激活某种ASAOpt in to Receiving the Asset
-            // Opting in to transact with the new asset
-            // All accounts that want recieve the new asset
-            // Have to opt in. To do this they send an asset transfer
-            // of the new asset to themseleves with an ammount of 0
-            // In this example we are setting up the 3rd recovered account to 
-            // receive the new asset        
+            // 激活(Opting in)某种ASA
+            // 如果你需要给其他用户转ASA，那么对方必须先激活
+            // 然后才能接收ASA       
             // First we update standard Transaction parameters
             // To account for changes in the state of the blockchain
             transParams = algodApiInstance.TransactionParams();
@@ -158,18 +157,14 @@ namespace algo_samples
                 return;
             }
 
-
-
-            // Transfer the Asset:
-            // Now that account3 can recieve the new asset 
-            // we can tranfer assets in from the creator
-            // to account3
+            // ASA转账
+            // 激活后account3就可以接收ASA了
+            // 现在我们从acctout1向account3转账
             // First we update standard Transaction parameters
             // To account for changes in the state of the blockchain
             transParams = algodApiInstance.TransactionParams();
             // Next we set asset xfer specific parameters
             // We set the assetCloseTo to null so we do not close the asset out
-            Address assetCloseTo = new Address();
             ulong assetAmount = 10;
             tx = Utils.GetTransferAssetTransaction(acct1.Address, acct3.Address, assetID, assetAmount, transParams, null, "transfer message");
             // The transaction must be signed by the sender account
@@ -194,27 +189,20 @@ namespace algo_samples
                 return;
             }
 
-
-
-
-
-            // Freeze the Asset:
-            // The asset was created and configured to allow freezing an account
-            // If the freeze address is blank, it will no longer be possible to do this.
-            // In this example we will now freeze account3 from transacting with the 
-            // The newly created asset. 
-            // Thre freeze transaction is sent from the freeze acount
-            // Which in this example is account2 
+            // 冻结资产
+            // 如果freeze address当时没有设置，则无法冻结资产
+            // 此例中冻结account3中的资产
+            // 冻结事件须由freeze acount来发出，本例中为account1
             // First we update standard Transaction parameters
             // To account for changes in the state of the blockchain
             transParams = algodApiInstance.TransactionParams();
             // Next we set asset xfer specific parameters
             // The sender should be freeze account acct2
             // Theaccount to freeze should be set to acct3
-            tx = Utils.GetFreezeAssetTransaction(acct2.Address, acct3.Address, assetID, true, transParams, "freeze transaction");
+            tx = Utils.GetFreezeAssetTransaction(acct1.Address, acct3.Address, assetID, true, transParams, "freeze transaction");
             // The transaction must be signed by the freeze account acct2
             // We are reusing the signedTx variable from the first transaction in the example    
-            signedTx = acct2.SignTransaction(tx);
+            signedTx = acct1.SignTransaction(tx);
             // send the transaction to the network and
             // wait for the transaction to be confirmed
             try
@@ -235,16 +223,12 @@ namespace algo_samples
                 return;
             }
 
-
-            // Revoke the asset:
-            // The asset was also created with the ability for it to be revoked by 
-            // clawbackaddress. If the asset was created or configured by the manager
-            // not allow this by setting the clawbackaddress to a blank address  
-            // then this would not be possible.
-            // We will now clawback the 10 assets in account3. Account2
-            // is the clawbackaccount and must sign the transaction
-            // The sender will be be the clawback adress.
-            // the recipient will also be be the creator acct1 in this case  
+            // 撤回转账
+            // 撤加转账必须由clawbackaddress发起。
+            // 如果资产的manager将clawbackaddress设为空，则此操作不可执行
+            // 本例中会将10个资产从account3撤回到account1
+            // 此操作需要由clawbackaccount（account2）进行签名
+            // 此操作发送者为原操作的发起者（acct1)
             // First we update standard Transaction parameters
             // To account for changes in the state of the blockchain
             transParams = algodApiInstance.TransactionParams();
@@ -268,46 +252,36 @@ namespace algo_samples
             }
             catch (Exception e)
             {
-                //e.printStackTrace();
                 Console.WriteLine(e.Message);
                 return;
             }
 
-
-
-            // Destroy the Asset:
-            // All of the created assets should now be back in the creators
-            // Account so we can delete the asset.
-            // If this is not the case the asset deletion will fail
-            // The address for the from field must be the creator
+            // 销毁资产
+            // 销毁资产前所有资产需要回到创建者账号中
+            // 销毁资产需要由Manage Addr进行操作
             // First we update standard Transaction parameters
             // To account for changes in the state of the blockchain
             transParams = algodApiInstance.TransactionParams();
             // Next we set asset xfer specific parameters
             // The manager must sign and submit the transaction
-            // This is currently set to acct1
-            tx = Utils.GetDestroyAssetTransaction(acct1.Address, assetID, transParams, "destroy transaction");
+            // This is currently set to acct2
+            tx = Utils.GetDestroyAssetTransaction(acct2.Address, assetID, transParams, "destroy transaction");
             // The transaction must be signed by the manager account
             // We are reusing the signedTx variable from the first transaction in the example    
-            signedTx = acct1.SignTransaction(tx);
+            signedTx = acct2.SignTransaction(tx);
             // send the transaction to the network and
             // wait for the transaction to be confirmed
             try
             {
                 TransactionID id = Utils.SubmitTransaction(algodApiInstance, signedTx);
                 Console.WriteLine("Transaction ID: " + id);
-                //waitForTransactionToComplete(algodApiInstance, signedTx.transactionID);
-                //Console.ReadKey();
                 Console.WriteLine(Utils.WaitTransactionToComplete(algodApiInstance, id.TxId));
                 // We can now list the account information for acct1 
                 // and see that the asset is no longer there
                 act = algodApiInstance.AccountInformation(acct1.Address.ToString());
-                //Console.WriteLine("Does AssetID: " + assetID + " exist? " +
-                //    act.Thisassettotal.ContainsKey(assetID));
             }
             catch (Exception e)
             {
-                //e.printStackTrace();
                 Console.WriteLine(e.Message);
                 return;
             }
