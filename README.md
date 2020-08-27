@@ -361,3 +361,23 @@ public static void Run(params string[] args) //throws Exception
 }
 ```
 
+
+
+```c#
+string SRC_ACCOUNT = "typical permit hurdle hat song detail cattle merge oxygen crowd arctic cargo smooth fly rice vacuum lounge yard frown predict west wife latin absent cup";
+// 使用助记词来创建账号
+Account src = new Account(SRC_ACCOUNT);
+// 账户的公钥（也是地址）
+var publicKey = src.Address;            
+// 助记词转换为主密钥
+var masterKey = Mnemonic.ToKey(SRC_ACCOUNT);
+// 使用主密钥来创建账号
+Account scr2 = new Account(masterKey);
+// 主密钥转换为助记词
+var mnemonic = Mnemonic.FromKey(masterKey);
+// 产生一个随机的账号
+var src3 = new Account();
+// 随机账号的助记词
+var randomAccountMnemonic = src3.ToMnemonic();
+```
+
